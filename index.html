@@ -811,7 +811,7 @@
 <script>
 /* E-Hadir GitHub Pages -> Cloudflare Worker compatibility layer */
 (function () {
-  const WORKER_API_URL = 'https://ehadirsmpn3br.ahmad-ramlan-mei.workers.dev/';
+  const WORKER_API_URL = 'https://ehadirsmpn3br.ahmad-ramlan-mei.workers.dev/api';
   let successHandler = null, failureHandler = null;
   const runner = new Proxy({}, {
     get(_target, prop) {
