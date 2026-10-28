@@ -125,6 +125,54 @@
             body.print-mode-rekap .status-badge { background: none !important; color: #000 !important; padding: 0 !important; border: none !important; font-weight: bold; }
         }
     </style>
+    <!-- FIX KHUSUS: pastikan header/logo E-Hadir tetap terlihat pada tablet dan layar kecil -->
+    <style id="ehadir-tablet-sidebar-brand-fix">
+        /* Header merek adalah anak pertama sidebar; jangan sampai tertekan/tersembunyi oleh layout flex. */
+        #app-sidebar {
+            min-height: 0 !important;
+            overflow: hidden !important;
+            flex-shrink: 0 !important;
+        }
+        #app-sidebar > div:first-child {
+            display: flex !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            position: relative !important;
+            flex: 0 0 auto !important;
+            flex-shrink: 0 !important;
+            min-height: 112px !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            padding: 20px 18px !important;
+            z-index: 2 !important;
+        }
+        #app-sidebar > div:first-child h2,
+        #app-sidebar > div:first-child #sidebar-role {
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        #app-sidebar > nav {
+            display: block !important;
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            overflow-y: auto !important;
+        }
+        #app-sidebar > div:last-child {
+            flex: 0 0 auto !important;
+        }
+        @media (max-width: 767px) {
+            body.is-logged-in #app-sidebar.show-mobile {
+                display: flex !important;
+                flex-direction: column !important;
+                width: min(82vw, 320px) !important;
+                height: 100dvh !important;
+                max-height: 100dvh !important;
+                overflow: hidden !important;
+            }
+        }
+    </style>
 </head>
 <body class="text-slate-800 h-screen flex flex-col md:flex-row overflow-hidden">
 
