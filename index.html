@@ -649,7 +649,7 @@
                 <div class="mb-6 flex flex-col md:flex-row justify-between items-start md:items-end gap-4 no-print">
                     <div>
                         <h2 class="text-2xl font-extrabold text-slate-800">Rekapitulasi</h2>
-                        <p class="text-slate-500 font-medium">Laporan kehadiran harian & bulanan</p>
+                        <p class="text-slate-500 font-medium">Laporan kehadiran harian, bulanan, dan semester</p>
                     </div>
                     
                     <div class="flex flex-wrap items-center gap-2 w-full md:w-auto bg-white p-2 rounded-2xl shadow-sm border border-slate-200">
@@ -716,8 +716,9 @@
                         <table id="table-rekap-summary" class="hidden w-full text-left border-collapse min-w-[600px] print-table">
                             <thead>
                                 <tr class="bg-slate-50 text-slate-500 text-[11px] font-bold uppercase tracking-wider border-b border-slate-200 text-center">
-                                    <th class="p-4 pl-6 text-left border-slate-200">Nama Siswa</th>
-                                    <th class="p-4 text-left border-slate-200">Kelas</th>
+                                    <th class="p-3 text-center border-slate-200">NIS</th>
+                                    <th class="p-3 pl-4 text-left border-slate-200">Nama Siswa</th>
+                                    <th class="p-3 text-left border-slate-200">Kelas</th>
                                     <th class="p-4 border-slate-200 text-green-600">Hadir</th>
                                     <th class="p-4 border-slate-200 text-yellow-600">Terlambat</th>
                                     <th class="p-4 border-slate-200 text-blue-600">Sakit</th>
@@ -1558,9 +1559,15 @@
             }
         }
 
-        const parseDateHelper = (dStr) => {
-            let parts = dStr.split('/');
-            return new Date(parts[2], parts[1] - 1, parts[0]);
+        // Normalisasi tanggal log: dd/MM/yyyy, d/M/yyyy, atau yyyy-MM-dd.
+        const parseDateHelper = (value) => {
+            const raw = String(value || '').trim();
+            if (!raw) return null;
+            let m = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+            if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+            m = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+            if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+            return null;
         };
 
         // Untuk akun orang tua (role "wali"), tampilkan hanya data anak yang terhubung.
@@ -1641,14 +1648,20 @@
                 const endVal = document.getElementById('rekap-end-date').value;
                 if(!startVal || !endVal) return;
                 
-                const startDate = new Date(startVal);
-                startDate.setHours(0,0,0,0);
-                const endDate = new Date(endVal);
-                endDate.setHours(23,59,59,999);
+                const startDate = new Date(startVal + 'T00:00:00');
+                const endDate = new Date(endVal + 'T23:59:59');
+                if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+                    showToast('Tanggal awal atau akhir tidak valid.', 'error');
+                    return;
+                }
+                if (startDate > endDate) {
+                    showToast('Tanggal awal tidak boleh melewati tanggal akhir.', 'error');
+                    return;
+                }
 
                 filteredData = sourceRekap.filter(item => {
-                    let logDate = parseDateHelper(item.tanggal);
-                    return logDate >= startDate && logDate <= endDate;
+                    const logDate = parseDateHelper(item.tanggal);
+                    return logDate instanceof Date && !Number.isNaN(logDate.getTime()) && logDate >= startDate && logDate <= endDate;
                 });
                 
                 const sdArr = startVal.split('-');
@@ -1698,28 +1711,33 @@
                 });
                 const hariEfektif = uniqueDates.size;
                 
+                // Gunakan NIS sebagai kunci utama agar siswa dengan nama sama tidak tercampur.
                 const stats = {};
+                const studentKey = (s) => String(s.nis || s.id || (s.nama + '|' + s.kelas) || '').trim();
                 studentsToConsider.forEach(s => {
-                    stats[s.nama] = { nama: s.nama, kelas: s.kelas, hadir: 0, terlambat: 0, sakit: 0, izin: 0, alpa: 0 };
+                    const key = studentKey(s);
+                    if (!key) return;
+                    stats[key] = { id: s.id || '', nis: s.nis || '', nama: s.nama || '-', kelas: s.kelas || '-', hadir: 0, terlambat: 0, sakit: 0, izin: 0, alpa: 0 };
                 });
-                
+
                 finalData.forEach(log => {
-                    if(stats[log.nama]) {
-                        const st = log.status.toLowerCase();
-                        if (st.includes('hadir')) stats[log.nama].hadir++;
-                        else if (st.includes('terlambat')) stats[log.nama].terlambat++;
-                        else if (st.includes('sakit')) stats[log.nama].sakit++;
-                        else if (st.includes('izin')) stats[log.nama].izin++;
-                    }
+                    const key = String(log.nis || log.id || '').trim();
+                    const row = stats[key];
+                    if (!row) return;
+                    const st = String(log.status || '').toLowerCase().trim();
+                    if (st === 'hadir' || st.includes('hadir')) row.hadir++;
+                    else if (st.includes('terlambat')) row.terlambat++;
+                    else if (st.includes('sakit')) row.sakit++;
+                    else if (st.includes('izin')) row.izin++;
                 });
-                
+
                 const summaryArray = [];
-                for (let n in stats) {
-                    let st = stats[n];
-                    let totalKehadiran = st.hadir + st.terlambat + st.sakit + st.izin;
+                Object.keys(stats).forEach(key => {
+                    const st = stats[key];
+                    const totalKehadiran = st.hadir + st.terlambat + st.sakit + st.izin;
                     st.alpa = Math.max(0, hariEfektif - totalKehadiran);
                     summaryArray.push(st);
-                }
+                });
                 
                 summaryArray.sort((a,b) => a.nama.localeCompare(b.nama));
                 renderSummaryTable(summaryArray, hariEfektif);
@@ -1915,20 +1933,21 @@
             tbody.innerHTML = '';
             
             if(data.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="7" class="p-10 text-center text-slate-400 font-medium">Tidak ada data siswa untuk filter ini.</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="8" class="p-10 text-center text-slate-400 font-medium">Tidak ada data siswa untuk filter ini.</td></tr>`;
                 return;
             }
 
             let infoRow = document.createElement('tr');
-            infoRow.innerHTML = `<td colspan="7" class="p-2 bg-blue-50/50 text-blue-600 text-xs font-bold text-center border-b border-slate-200">Total Hari Efektif Absensi: ${hariEfektif} Hari (berdasarkan log yang terekam)</td>`;
+            infoRow.innerHTML = `<td colspan="8" class="p-2 bg-blue-50/50 text-blue-600 text-xs font-bold text-center border-b border-slate-200">Hari terpantau: ${hariEfektif} hari (tanggal dengan minimal satu log absensi)</td>`;
             tbody.appendChild(infoRow);
 
             data.forEach(row => {
                 let tr = document.createElement('tr');
                 tr.className = "hover:bg-slate-50 border-b border-slate-100 transition-colors";
                 tr.innerHTML = `
-                    <td class="p-4 pl-6 text-slate-800 font-bold border-slate-200">${row.nama}</td>
-                    <td class="p-4 text-slate-600 border-slate-200">${row.kelas}</td>
+                    <td class="p-3 text-center font-mono text-xs text-slate-600 border-slate-200">${row.nis || '-'}</td>
+                    <td class="p-3 pl-4 text-slate-800 font-bold border-slate-200">${row.nama}</td>
+                    <td class="p-3 text-slate-600 border-slate-200">${row.kelas}</td>
                     <td class="p-4 text-center font-bold text-green-600 border-slate-200">${row.hadir}</td>
                     <td class="p-4 text-center font-bold text-yellow-600 border-slate-200">${row.terlambat}</td>
                     <td class="p-4 text-center font-bold text-blue-600 border-slate-200">${row.sakit}</td>
