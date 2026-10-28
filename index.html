@@ -464,6 +464,16 @@
                     </button>
                 </div>
 
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5 flex flex-col sm:flex-row gap-3 sm:items-end">
+                    <div class="flex-1"><label for="dash-filter-periode" class="block text-xs font-bold text-slate-500 mb-2">PERIODE ANALISIS</label><select id="dash-filter-periode" onchange="loadDashboard()" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-semibold"><option value="hari">Hari ini</option><option value="7hari">7 hari terakhir</option><option value="30hari">30 hari terakhir</option></select></div>
+                    <div class="flex-1"><label for="dash-filter-kelas" class="block text-xs font-bold text-slate-500 mb-2">KELAS</label><select id="dash-filter-kelas" onchange="loadDashboard()" class="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-semibold"><option value="semua">Semua Kelas</option></select></div>
+                    <div class="sm:text-right"><p class="text-xs font-bold text-slate-500">PERSENTASE HADIR HARI INI</p><p class="text-2xl font-black text-emerald-600" id="stat-persentase">0%</p></div>
+                </div>
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 mb-8">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4"><div><h3 class="font-extrabold text-slate-800">Tren Kehadiran</h3><p class="text-xs text-slate-500">Jumlah hadir dan terlambat berdasarkan data absensi tersimpan</p></div><span id="dash-trend-caption" class="text-xs text-slate-400">Periode: hari ini</span></div>
+                    <div id="dash-trend-chart" class="flex items-end gap-2 h-36 overflow-x-auto pb-1"><p class="text-sm text-slate-400">Memuat tren...</p></div>
+                </div>
+
                 <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 lg:gap-5 mb-8">
                     <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 border-b-4 border-b-blue-500">
                         <div class="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center mb-3"><i class="fas fa-users"></i></div>
@@ -1435,26 +1445,31 @@
         }
 
         function loadDashboard() {
-            showLoading("Memuat Dashboard...");
-            const paramWali = currentUser.sessionToken;
-            
-            google.script.run
-                .withSuccessHandler(function(res) {
-                    hideLoading();
-                    if(res.status === 'error') return showToast(res.message, "error");
-                    document.getElementById('stat-total').innerText = res.total_siswa;
-                    document.getElementById('stat-hadir').innerText = res.sudah_hadir;
-                    document.getElementById('stat-terlambat').innerText = res.terlambat;
-                    document.getElementById('stat-sakit').innerText = res.sakit;
-                    document.getElementById('stat-izin').innerText = res.izin;
-                    document.getElementById('stat-belum').innerText = res.belum_hadir;
-                    
-                    renderTable('dash-table-body', res.history, ['waktu', 'nis', 'nama', 'kelas', 'status']);
-                })
-                .withFailureHandler(function(error) { hideLoading(); showToast('Error: ' + error.message, 'error'); })
-                .apiGetDashboard(paramWali);
+            const loading = document.getElementById('view-dashboard') && document.getElementById('view-dashboard').classList.contains('active');
+            if (loading) showLoading("Memuat Dashboard...");
+            const token = currentUser && currentUser.sessionToken;
+            const periodeEl = document.getElementById('dash-filter-periode');
+            const kelasEl = document.getElementById('dash-filter-kelas');
+            const filters = { periode: periodeEl ? periodeEl.value : 'hari', kelas: kelasEl ? kelasEl.value : 'semua' };
+            google.script.run.withSuccessHandler(function(res) {
+                if (loading) hideLoading();
+                if (!res || res.status === 'error') return showToast(res && res.message ? res.message : 'Data dashboard gagal dimuat.', 'error');
+                ['total','hadir','terlambat','sakit','izin','belum'].forEach((k)=>{ const el=document.getElementById('stat-'+k); if(el) el.innerText = ({total:res.total_siswa,hadir:res.sudah_hadir,terlambat:res.terlambat,sakit:res.sakit,izin:res.izin,belum:res.belum_hadir})[k] ?? 0; });
+                const p=document.getElementById('stat-persentase'); if(p) p.innerText=(res.persentase_hadir || 0)+'%';
+                renderTable('dash-table-body', res.history || [], ['waktu', 'nis', 'nama', 'kelas', 'status']);
+                renderDashboardTrend(res.trend || [], filters.periode);
+            }).withFailureHandler(function(error) { if (loading) hideLoading(); showToast('Error: ' + error.message, 'error'); }).apiGetDashboard(token, filters);
         }
-        
+
+        function renderDashboardTrend(trend, periode) {
+            const el=document.getElementById('dash-trend-chart'); if(!el) return;
+            const cap=document.getElementById('dash-trend-caption');
+            if(cap) cap.textContent='Periode: '+(periode==='30hari'?'30 hari terakhir':periode==='7hari'?'7 hari terakhir':'hari ini');
+            if(!trend.length){el.innerHTML='<p class="text-sm text-slate-400">Belum ada data pada periode ini.</p>';return;}
+            const max=Math.max(1,...trend.map(x=>Number(x.hadir||0)));
+            el.innerHTML=trend.map(x=>{const n=Number(x.hadir||0), late=Number(x.terlambat||0); const h=Math.max(4,Math.round(n/max*100)); return `<div class="min-w-[36px] flex-1 flex flex-col items-center justify-end h-full gap-1" title="${x.tanggal}: hadir/terlambat ${n}, terlambat ${late}"><span class="text-[10px] font-bold text-slate-600">${n}</span><div class="w-full max-w-[34px] rounded-t-md bg-emerald-500 relative" style="height:${h}%"><div class="absolute bottom-0 left-0 right-0 bg-amber-400 rounded-t-md" style="height:${n?Math.min(100,late/n*100):0}%"></div></div><span class="text-[9px] text-slate-500 whitespace-nowrap">${x.tanggal}</span></div>`;}).join('');
+        }
+
         function populateClassFilters(students) {
             const classes = [...new Set(students.map(s => s.kelas))].sort();
             const filterSiswa = document.getElementById('siswa-filter-kelas');
@@ -1464,6 +1479,8 @@
             
             if(filterSiswa) filterSiswa.innerHTML = optionsHTML;
             if(filterRekap) filterRekap.innerHTML = optionsHTML;
+            const filterDash = document.getElementById('dash-filter-kelas');
+            if(filterDash) { const prior=filterDash.value || 'semua'; filterDash.innerHTML=optionsHTML; if([...filterDash.options].some(o=>o.value===prior)) filterDash.value=prior; }
         }
 
         function loadStudents() {
