@@ -1112,7 +1112,7 @@
                     if (res.status === 'success' && res.data['Nama Sekolah']) {
                         document.getElementById('header-school-name').innerText = res.data['Nama Sekolah'];
                     }
-                }).apiGetSettings();
+                }).apiGetSettings(currentUser.sessionToken);
             }
         }
 
@@ -1364,7 +1364,7 @@
                     hideLoading();
                     showToast("Server Error: " + error.message, "error");
                 })
-                .apiScan(qrId, dateStr, timeStr, currentUser.username);
+                .apiScan(currentUser.sessionToken, qrId, dateStr, timeStr, currentUser.username);
         }
 
         function handleScanResult(res, siswa, date, time) {
@@ -2174,7 +2174,7 @@
                     } else showToast(res.message, "error");
                 })
                 .withFailureHandler(function(error) { hideLoading(); })
-                .apiAddStudentsBulk(studentsToSave);
+                .apiAddStudentsBulk(currentUser.sessionToken, studentsToSave);
         }
 
         function submitSiswa(e) {
@@ -2197,7 +2197,7 @@
                         showToast("Data ditambahkan!", "success"); 
                         loadStudents(); 
                     }
-                }).apiAddStudent(newSiswa);
+                }).apiAddStudent(currentUser.sessionToken, newSiswa);
         }
 
         function loadPengaturan() {
@@ -2217,7 +2217,7 @@
                     }
                 })
                 .withFailureHandler(function(error) { hideLoading(); })
-                .apiGetSettings();
+                .apiGetSettings(currentUser.sessionToken);
         }
 
         function submitPengaturan(e) {
@@ -2241,7 +2241,7 @@
                     } else showToast(res.message, "error");
                 })
                 .withFailureHandler(function(error) { hideLoading(); })
-                .apiSaveSettings(newData);
+                .apiSaveSettings(currentUser.sessionToken, newData);
         }
 
         function submitManualAbsen(e) {
@@ -2274,7 +2274,7 @@
                     } else showToast(res.message, "error");
                 })
                 .withFailureHandler(function(error) { hideLoading(); })
-                .apiManualAbsen(data);
+                .apiManualAbsen(currentUser.sessionToken, data);
         }
 
         function showModal(id) {
